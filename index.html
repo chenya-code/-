@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>产品需求管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        background: radial-gradient(
+            900px 600px at 15% 10%,
+            rgba(56, 189, 248, 0.18),
+            transparent 55%
+          ),
+          radial-gradient(
+            900px 600px at 85% 20%,
+            rgba(34, 197, 94, 0.14),
+            transparent 55%
+          ),
+          radial-gradient(
+            900px 600px at 55% 90%,
+            rgba(245, 158, 11, 0.14),
+            transparent 55%
+          ),
+          #ffffff;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-900 selection:bg-sky-200 selection:text-slate-900">
+    <div class="mx-auto max-w-6xl px-4 py-10">
+      <div class="mb-5 flex flex-col gap-2">
+        <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">产品需求管理</h1>
+        <p class="text-sm text-slate-600">
+          输入需求并添加到下方表格（支持 localStorage 持久化，刷新页面不会丢失）。
+        </p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <form id="reqForm" class="grid grid-cols-1 gap-4 lg:grid-cols-12" autocomplete="off">
+          <div class="lg:col-span-3">
+            <label for="name" class="mb-2 block text-xs font-medium text-slate-700">需求名称</label>
+            <input
+              id="name"
+              name="name"
+              placeholder="例如：支持导出报表"
+              required
+              maxlength="50"
+              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-sky-500 focus:ring-4 focus:ring-sky-200"
+            />
+          </div>
+          <div class="lg:col-span-5">
+            <label for="desc" class="mb-2 block text-xs font-medium text-slate-700">需求描述</label>
+            <textarea
+              id="desc"
+              name="desc"
+              placeholder="简要说明需求背景、目标与范围"
+              required
+              maxlength="300"
+              class="min-h-[40px] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-200"
+            ></textarea>
+          </div>
+          <div class="lg:col-span-2">
+            <label for="priority" class="mb-2 block text-xs font-medium text-slate-700"
+              >优先级（红/黄/绿）</label
+            >
+            <select
+              id="priority"
+              name="priority"
+              required
+              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-200"
+            >
+              <option value="red">红（高）</option>
+              <option value="yellow">黄（中）</option>
+              <option value="green">绿（低）</option>
+            </select>
+          </div>
+          <div class="lg:col-span-2">
+            <label for="plannedAt" class="mb-2 block text-xs font-medium text-slate-700">计划时间</label>
+            <input
+              id="plannedAt"
+              name="plannedAt"
+              type="datetime-local"
+              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-200"
+            />
+          </div>
+          <div class="lg:col-span-12">
+            <button
+              class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-500 active:bg-sky-700"
+              type="submit"
+            >
+              添加需求
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="overflow-auto">
+          <table class="min-w-[980px] w-full text-left text-sm" aria-label="需求列表">
+            <thead class="sticky top-0 z-10 bg-slate-50">
+              <tr class="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <th class="px-4 py-3" style="width: 6%">序号</th>
+                <th class="px-4 py-3" style="width: 16%">需求名称</th>
+                <th class="px-4 py-3">描述</th>
+                <th class="px-4 py-3" style="width: 14%">优先级</th>
+                <th class="px-4 py-3" style="width: 14%">状态</th>
+                <th class="px-4 py-3" style="width: 14%">添加时间</th>
+                <th class="px-4 py-3" style="width: 14%">计划时间</th>
+                <th class="px-4 py-3" style="width: 14%">完成时间</th>
+                <th class="px-4 py-3 text-right" style="width: 12%">操作</th>
+              </tr>
+            </thead>
+            <tbody id="reqTbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="mt-3 text-xs text-slate-500">
+        提示：状态单元格可点击循环切换（未开始 → 进行中 → 已完成），数据保存在浏览器 localStorage。
+      </p>
+    </div>
+
+    <script>
+      const STATUS_OPTIONS = ["未开始", "进行中", "已完成"];
+      const STORAGE_KEY = "prd_requirements_v1";
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function priorityLabel(priority) {
+        if (priority === "red") return "红（高）";
+        if (priority === "yellow") return "黄（中）";
+        return "绿（低）";
+      }
+
+      function createTag(priority) {
+        const label = priorityLabel(priority);
+        if (priority === "red") {
+          return `<span class="inline-flex items-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-200"><span class="h-2 w-2 rounded-full bg-red-400"></span>${escapeHtml(
+            label
+          )}</span>`;
+        }
+        if (priority === "yellow") {
+          return `<span class="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200"><span class="h-2 w-2 rounded-full bg-amber-400"></span>${escapeHtml(
+            label
+          )}</span>`;
+        }
+        return `<span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${escapeHtml(
+          label
+        )}</span>`;
+      }
+
+      function nextStatus(current) {
+        const idx = STATUS_OPTIONS.indexOf(current);
+        const nextIdx = idx === -1 ? 0 : (idx + 1) % STATUS_OPTIONS.length;
+        return STATUS_OPTIONS[nextIdx];
+      }
+
+      function nowIso() {
+        return new Date().toISOString();
+      }
+
+      function formatTime(iso) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "-";
+        return new Intl.DateTimeFormat("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(d);
+      }
+
+      function fromDateTimeLocal(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString();
+      }
+
+      function saveRequirements(list) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        } catch {
+          // ignore storage failures (e.g. quota)
+        }
+      }
+
+      function loadRequirements() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return null;
+          return parsed;
+        } catch {
+          return null;
+        }
+      }
+
+      function normalizeRequirements(list) {
+        const fallbackCreatedAt = nowIso();
+        return list
+          .filter((x) => x && typeof x === "object")
+          .map((x) => {
+            const status = STATUS_OPTIONS.includes(x.status) ? x.status : "未开始";
+            const createdAt = typeof x.createdAt === "string" ? x.createdAt : fallbackCreatedAt;
+            const plannedAt = typeof x.plannedAt === "string" ? x.plannedAt : "";
+            let completedAt = typeof x.completedAt === "string" ? x.completedAt : "";
+            if (status === "已完成" && !completedAt) completedAt = createdAt;
+            const priority =
+              x.priority === "red" || x.priority === "yellow" || x.priority === "green"
+                ? x.priority
+                : "yellow";
+            return {
+              id: typeof x.id === "string" ? x.id : crypto.randomUUID(),
+              name: typeof x.name === "string" ? x.name : "",
+              desc: typeof x.desc === "string" ? x.desc : "",
+              priority,
+              status,
+              createdAt,
+              plannedAt,
+              completedAt,
+            };
+          })
+          .filter((x) => x.name.trim() && x.desc.trim());
+      }
+
+      function seedRequirements() {
+        const t = nowIso();
+        return [
+          {
+            id: crypto.randomUUID(),
+            name: "支持导出报表",
+            desc: "提供 CSV/Excel 导出，支持按时间范围筛选。",
+            priority: "red",
+            status: "进行中",
+            createdAt: t,
+            plannedAt: "",
+            completedAt: "",
+          },
+          {
+            id: crypto.randomUUID(),
+            name: "新增新手引导",
+            desc: "首次登录展示关键功能指引，降低上手成本。",
+            priority: "yellow",
+            status: "未开始",
+            createdAt: t,
+            plannedAt: "",
+            completedAt: "",
+          },
+        ];
+      }
+
+      /** @type {{id:string,name:string,desc:string,priority:'red'|'yellow'|'green',status:string,createdAt:string,plannedAt:string,completedAt:string}[]} */
+      let requirements = (() => {
+        const loaded = loadRequirements();
+        if (!loaded) {
+          const seeded = seedRequirements();
+          saveRequirements(seeded);
+          return seeded;
+        }
+        const normalized = normalizeRequirements(loaded);
+        saveRequirements(normalized);
+        return normalized;
+      })();
+
+      const tbody = document.getElementById("reqTbody");
+      const form = document.getElementById("reqForm");
+      const nameInput = document.getElementById("name");
+      const descInput = document.getElementById("desc");
+      const prioritySelect = document.getElementById("priority");
+      const plannedAtInput = document.getElementById("plannedAt");
+
+      function rowClassByStatus(status) {
+        if (status === "已完成") return "bg-slate-50 text-slate-500";
+        if (status === "进行中") return "bg-emerald-50";
+        return "bg-sky-50";
+      }
+
+      function render() {
+        tbody.innerHTML = requirements
+          .map((r, idx) => {
+            return `
+              <tr data-id="${escapeHtml(r.id)}" class="${rowClassByStatus(
+              r.status
+            )} hover:bg-slate-50 transition-colors">
+                <td class="px-4 py-3 align-top text-slate-500">${idx + 1}</td>
+                <td class="px-4 py-3 align-top font-semibold text-slate-900">${escapeHtml(r.name)}</td>
+                <td class="px-4 py-3 align-top text-slate-700">${escapeHtml(r.desc)}</td>
+                <td class="px-4 py-3 align-top">${createTag(r.priority)}</td>
+                <td class="px-4 py-3 align-top">
+                  <button class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition" type="button" data-action="cycle-status" title="点击切换状态">
+                    ${escapeHtml(r.status)}
+                  </button>
+                </td>
+                <td class="px-4 py-3 align-top text-slate-500">${escapeHtml(formatTime(r.createdAt))}</td>
+                <td class="px-4 py-3 align-top text-slate-500">${escapeHtml(formatTime(r.plannedAt))}</td>
+                <td class="px-4 py-3 align-top text-slate-500">${escapeHtml(formatTime(r.completedAt))}</td>
+                <td class="px-4 py-3 align-top text-right">
+                  <button class="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition" type="button" data-action="delete">删除</button>
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = nameInput.value.trim();
+        const desc = descInput.value.trim();
+        const priority = prioritySelect.value;
+        const plannedAt = fromDateTimeLocal(plannedAtInput.value);
+
+        if (!name || !desc) return;
+
+        requirements = [
+          {
+            id: crypto.randomUUID(),
+            name,
+            desc,
+            priority,
+            status: "未开始",
+            createdAt: nowIso(),
+            plannedAt,
+            completedAt: "",
+          },
+          ...requirements,
+        ];
+
+        form.reset();
+        prioritySelect.value = "red";
+        saveRequirements(requirements);
+        render();
+      });
+
+      tbody.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const tr = btn.closest("tr[data-id]");
+        if (!tr) return;
+
+        const id = tr.getAttribute("data-id");
+        const action = btn.getAttribute("data-action");
+        if (action === "delete") {
+          requirements = requirements.filter((r) => r.id !== id);
+          saveRequirements(requirements);
+          render();
+          return;
+        }
+        if (action === "cycle-status") {
+          requirements = requirements.map((r) => {
+            if (r.id !== id) return r;
+            const status = nextStatus(r.status);
+            const completedAt = status === "已完成" ? nowIso() : "";
+            return { ...r, status, completedAt };
+          });
+          saveRequirements(requirements);
+          render();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
+
